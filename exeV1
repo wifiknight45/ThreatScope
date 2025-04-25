@@ -1,0 +1,85 @@
+import pandas as pd
+import plotly.express as px
+import dash
+from dash import dcc, html, Input, Output
+import flask
+import json
+import requests
+from sklearn.ensemble import IsolationForest
+from statsmodels.tsa.seasonal import seasonal_decompose
+import threading
+import time
+
+# Flask setup for authentication
+server = flask.Flask(__name__)
+app = dash.Dash(__name__, server=server)
+
+# Function to fetch logs from Wazuh SIEM
+def fetch_security_logs():
+    wazuh_api = "https://YOUR_WAZUH_MANAGER:55000/security/events"
+    headers = {"Authorization": "Bearer YOUR_API_KEY"}
+    response = requests.get(wazuh_api, headers=headers, verify=False)
+
+    if response.status_code == 200:
+        return pd.DataFrame(response.json()["events"])
+    else:
+        print("Failed to fetch logs")
+        return pd.DataFrame()
+
+# Real-time log update mechanism
+security_logs = fetch_security_logs()
+
+def update_logs():
+    global security_logs
+    while True:
+        security_logs = fetch_security_logs()
+        time.sleep(30)  # Update every 30 seconds
+
+# Start the log update in a separate thread
+threading.Thread(target=update_logs, daemon=True).start()
+
+# Time-series anomaly detection using seasonal decomposition
+def detect_anomalies(df):
+    if "Event_Severity" in df.columns:
+        model = IsolationForest(contamination=0.05)
+        df["Anomaly_Score"] = model.fit_predict(df[["Event_Severity"]])
+        df["Anomaly"] = df["Anomaly_Score"].apply(lambda x: "Yes" if x == -1 else "No")
+
+        # Time-series decomposition for deeper anomaly analysis
+        df["Timestamp"] = pd.to_datetime(df["Timestamp"])
+        df.sort_values(by="Timestamp", inplace=True)
+        decomposed = seasonal_decompose(df["Event_Severity"], period=5, model="additive")
+        df["Trend"] = decomposed.trend
+        df["Seasonality"] = decomposed.seasonal
+    return df
+
+# Dash layout
+app.layout = html.Div([
+    html.H1("SOC Dashboard - Real-Time Security Analytics"),
+    
+    dcc.Graph(id="live-update-graph"),
+    
+    html.Button("Export Logs as TXT", id="export-txt"),
+    html.Button("Export Logs as CSV", id="export-csv"),
+])
+
+# Callback for real-time graph updates
+@app.callback(
+    Output("live-update-graph", "figure"),
+    Input("live-update-graph", "id")
+)
+def update_graph(_):
+    updated_df = detect_anomalies(security_logs)
+    figure = px.scatter(updated_df, x="Timestamp", y="Event_Severity", color="Anomaly",
+                        title="Security Events - Real-Time Anomaly Detection")
+    return figure
+
+# Export functionality
+@app.server.route("/export/<format>")
+def export_logs(format):
+    filename = f"security_logs.{format}"
+    security_logs.to_csv(filename) if format == "csv" else security_logs.to_string(filename)
+    return f"Logs exported as {filename}"
+
+if __name__ == "__main__":
+    app.run_server(debug=True)
