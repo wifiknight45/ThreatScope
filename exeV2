@@ -1,0 +1,101 @@
+import pandas as pd
+import plotly.express as px
+import dash
+from dash import dcc, html, Input, Output
+import flask
+import json
+import requests
+import logging
+from sklearn.ensemble import IsolationForest
+from statsmodels.tsa.seasonal import seasonal_decompose
+import threading
+import time
+
+# Flask setup for authentication
+server = flask.Flask(__name__)
+app = dash.Dash(__name__, server=server)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Function to fetch logs from Wazuh SIEM with error handling
+def fetch_security_logs():
+    wazuh_api = "https://YOUR_WAZUH_MANAGER:55000/security/events"
+    headers = {"Authorization": "Bearer YOUR_API_KEY"}
+    
+    try:
+        response = requests.get(wazuh_api, headers=headers, verify=True, timeout=10)
+        response.raise_for_status()  # Raise exception for bad status codes
+        return pd.DataFrame(response.json().get("events", []))
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to fetch logs: {e}")
+        return pd.DataFrame()
+
+# Real-time log update mechanism with thread safety
+security_logs = fetch_security_logs()
+security_logs_lock = threading.Lock()
+
+def update_logs(interval=30):
+    global security_logs
+    while True:
+        with security_logs_lock:
+            security_logs = fetch_security_logs()
+        time.sleep(interval)  # Update frequency is now adjustable
+
+# Start the log update in a separate thread
+threading.Thread(target=update_logs, args=(30,), daemon=True).start()
+
+# Time-series anomaly detection using seasonal decomposition
+def detect_anomalies(df):
+    if "Event_Severity" in df.columns and not df.empty:
+        contamination_level = min(0.05, 1 / len(df))
+        model = IsolationForest(contamination=contamination_level, random_state=42)
+        df["Anomaly_Score"] = model.fit_predict(df[["Event_Severity"]])
+        df["Anomaly"] = df["Anomaly_Score"].apply(lambda x: "Yes" if x == -1 else "No")
+
+        # Time-series decomposition for deeper anomaly analysis
+        df["Timestamp"] = pd.to_datetime(df["Timestamp"])
+        df.sort_values(by="Timestamp", inplace=True)
+        decomposed = seasonal_decompose(df["Event_Severity"], period=5, model="additive")
+        df["Trend"], df["Seasonality"] = decomposed.trend, decomposed.seasonal
+    return df
+
+# Dash layout
+app.layout = html.Div([
+    html.H1("SOC Dashboard - Real-Time Security Analytics"),
+    
+    dcc.Graph(id="live-update-graph"),
+    
+    html.Button("Export Logs as TXT", id="export-txt"),
+    html.Button("Export Logs as CSV", id="export-csv"),
+])
+
+# Callback for real-time graph updates
+@app.callback(
+    Output("live-update-graph", "figure"),
+    Input("live-update-graph", "id")
+)
+def update_graph(_):
+    with security_logs_lock:
+        updated_df = detect_anomalies(security_logs)
+    
+    figure = px.scatter(updated_df, x="Timestamp", y="Event_Severity", color="Anomaly",
+                        title="Security Events - Real-Time Anomaly Detection")
+    return figure
+
+# Secure Export Functionality
+@app.server.route("/export/<format>")
+def export_logs(format):
+    filename = f"security_logs.{format}"
+    with security_logs_lock:
+        if format == "csv":
+            security_logs.to_csv(filename, index=False)
+        else:
+            with open(filename, "w") as f:
+                f.write(security_logs.to_string())
+
+    logging.info(f"Logs exported as {filename}")
+    return f"Logs exported as {filename}"
+
+if __name__ == "__main__":
+    app.run_server(debug=True, use_reloader=False)  # Disabled reloader to prevent duplicate threading issues
