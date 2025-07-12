@@ -1,6 +1,25 @@
 
+  **ThreatScope = SOC Dashboard - Real-Time Security Analytics** script
 
-updated readme to follow 
+**Please note that ThreatScope is currently under development for enhanced security + improved error handling
++ scalability with integration of the open source Wazuh SIEM.**
+
+  ## Overview
+This Python application provides **real-time security event monitoring** using **Dash**, **Flask**, and **machine learning-based anomaly detection**. It fetches logs from a **Wazuh SIEM**, analyzes security events for anomalies, and visualizes them in an interactive web-based dashboard.
+
+## Features
+✅ **Real-Time Log Updates** – Fetches security logs dynamically from Wazuh SIEM.  
+✅ **Anomaly Detection** – Uses `IsolationForest` for identifying unusual security events.  
+✅ **Time-Series Analysis** – Leverages `seasonal_decompose` for trend and seasonality insights.  
+✅ **Multi-threading for Efficiency** – Ensures seamless background log updates.  
+✅ **Secure API Requests** – Implements HTTPS security and request error handling.  
+✅ **Export Functionality** – Supports exporting logs as CSV or TXT files.  
+✅ **Scalable & Configurable** – Adjustable log refresh rate and enhanced thread safety.
+
+==================================================================================================================
+
+
+RECENT DEVELOPMENTS/UPDATES:
 ## v2 is now live!
 key updates:
 Exception Handling - protects against request failures and network errors.
@@ -14,28 +33,13 @@ V2 is more secure, scalable and efficient.
 # ThreatScope version 1 is now live
 This Automated SOC Dashboard Generator is a real-time security analytics tool that fetches logs from open-source SIEM solutions, applies machine learning for anomaly detection, implements role-based access control, and allows exporting security logs for further analysis.
 
-**ThreatScope = SOC Dashboard - Real-Time Security Analytics** script
-
-# SOC Dashboard - Real-Time Security Analytics
-
-## Overview
-This Python application provides **real-time security event monitoring** using **Dash**, **Flask**, and **machine learning-based anomaly detection**. It fetches logs from a **Wazuh SIEM**, analyzes security events for anomalies, and visualizes them in an interactive web-based dashboard.
-
-## Features
-✅ **Real-Time Log Updates** – Fetches security logs dynamically from Wazuh SIEM.  
-✅ **Anomaly Detection** – Uses `IsolationForest` for identifying unusual security events.  
-✅ **Time-Series Analysis** – Leverages `seasonal_decompose` for trend and seasonality insights.  
-✅ **Multi-threading for Efficiency** – Ensures seamless background log updates.  
-✅ **Secure API Requests** – Implements HTTPS security and request error handling.  
-✅ **Export Functionality** – Supports exporting logs as CSV or TXT files.  
-✅ **Scalable & Configurable** – Adjustable log refresh rate and enhanced thread safety.
-
 ## Installation
 Ensure you have Python **3.8 or later** installed. Then, clone this repository and install dependencies:
 
 ```bash
-git clone https://github.com/your-repo/SOC-Dashboard.git
-cd SOC-Dashboard
+git clone https://github.com/wifiknight45/ThreatScope.git
+cd ThreatScope
+
 pip install -r requirements.txt
 ```
 
